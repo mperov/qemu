@@ -5700,6 +5700,33 @@ static void register_power9_mmu_sprs(CPUPPCState *env)
 #endif
 }
 
+static void register_power10_hash_sprs(CPUPPCState *env)
+{
+    /*
+     * it's the OS responsability to generate a random value for the registers
+     * in each process' context. So, initialize it with 0 here.
+     */
+    uint64_t hashkeyr_initial_value = 0, hashpkeyr_initial_value = 0;
+#if defined(CONFIG_USER_ONLY)
+    /* in linux-user, setup the hash register with a random value */
+    GRand *rand = g_rand_new();
+    hashkeyr_initial_value =
+        ((uint64_t)g_rand_int(rand) << 32) | (uint64_t)g_rand_int(rand);
+    hashpkeyr_initial_value =
+        ((uint64_t)g_rand_int(rand) << 32) | (uint64_t)g_rand_int(rand);
+    g_rand_free(rand);
+#endif
+    spr_register(env, SPR_HASHKEYR, "HASHKEYR",
+            SPR_NOACCESS, SPR_NOACCESS,
+            &spr_read_generic, &spr_write_generic,
+            hashkeyr_initial_value);
+    spr_register_hv(env, SPR_HASHPKEYR, "HASHPKEYR",
+            SPR_NOACCESS, SPR_NOACCESS,
+            SPR_NOACCESS, SPR_NOACCESS,
+            &spr_read_generic, &spr_write_generic,
+            hashpkeyr_initial_value);
+}
+
 /*
  * Initialize PMU counter overflow timers for Power8 and
  * newer Power chips when using TCG.
@@ -6518,6 +6545,7 @@ static void init_proc_POWER10(CPUPPCState *env)
     register_power8_book4_sprs(env);
     register_power8_rpr_sprs(env);
     register_power9_mmu_sprs(env);
+    register_power10_hash_sprs(env);
 
     /* FIXME: Filter fields properly based on privilege level */
     spr_register_kvm_hv(env, SPR_PSSCR, "PSSCR", NULL, NULL, NULL, NULL,
@@ -7186,6 +7214,13 @@ static void ppc_cpu_set_pc(CPUState *cs, vaddr value)
     cpu->env.nip = value;
 }
 
+static vaddr ppc_cpu_get_pc(CPUState *cs)
+{
+    PowerPCCPU *cpu = POWERPC_CPU(cs);
+
+    return cpu->env.nip;
+}
+
 static bool ppc_cpu_has_work(CPUState *cs)
 {
     PowerPCCPU *cpu = POWERPC_CPU(cs);
@@ -7444,6 +7479,7 @@ static void ppc_cpu_class_init(ObjectClass *oc, void *data)
     cc->has_work = ppc_cpu_has_work;
     cc->dump_state = ppc_cpu_dump_state;
     cc->set_pc = ppc_cpu_set_pc;
+    cc->get_pc = ppc_cpu_get_pc;
     cc->gdb_read_register = ppc_cpu_gdb_read_register;
     cc->gdb_write_register = ppc_cpu_gdb_write_register;
 #ifndef CONFIG_USER_ONLY

@@ -37,7 +37,8 @@ DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
     "                memory-encryption=@var{} memory encryption object to use (default=none)\n"
     "                hmat=on|off controls ACPI HMAT support (default=off)\n"
     "                memory-backend='backend-id' specifies explicitly provided backend for main RAM (default=none)\n"
-    "                cxl-fmw.0.targets.0=firsttarget,cxl-fmw.0.targets.1=secondtarget,cxl-fmw.0.size=size[,cxl-fmw.0.interleave-granularity=granularity]\n",
+    "                cxl-fmw.0.targets.0=firsttarget,cxl-fmw.0.targets.1=secondtarget,cxl-fmw.0.size=size[,cxl-fmw.0.interleave-granularity=granularity]\n"
+    "                zpcii-disable=on|off disables zPCI interpretation facilities (default=off)\n",
     QEMU_ARCH_ALL)
 SRST
 ``-machine [type=]name[,prop=value[,...]]``
@@ -157,6 +158,11 @@ SRST
         ::
 
             -machine cxl-fmw.0.targets.0=cxl.0,cxl-fmw.0.targets.1=cxl.1,cxl-fmw.0.size=128G,cxl-fmw.0.interleave-granularity=512k
+
+    ``zpcii-disable=on|off``
+        Disables zPCI interpretation facilties on s390-ccw hosts.
+        This feature can be used to disable hardware virtual assists
+        related to zPCI devices. The default is off.
 ERST
 
 DEF("M", HAS_ARG, QEMU_OPTION_M,
@@ -704,10 +710,11 @@ SRST
 ``-audio [driver=]driver,model=value[,prop[=value][,...]]``
     This option is a shortcut for configuring both the guest audio
     hardware and the host audio backend in one go.
-    The host backend options are the same as with the corresponding
-    ``-audiodev`` options below. The guest hardware model can be set with
-    ``model=modelname``. Use ``model=help`` to list the available device
-    types.
+    The driver option is the same as with the corresponding ``-audiodev`` option below.
+    The guest hardware model can be set with ``model=modelname``.
+
+    Use ``driver=help`` to list the available drivers,
+    and ``model=help`` to list the available device types.
 
     The following two example do exactly the same, to show how ``-audio``
     can be used to shorten the command line length:
@@ -721,6 +728,7 @@ ERST
 DEF("audiodev", HAS_ARG, QEMU_OPTION_audiodev,
     "-audiodev [driver=]driver,id=id[,prop[=value][,...]]\n"
     "                specifies the audio backend to use\n"
+    "                Use ``-audiodev help`` to list the available drivers\n"
     "                id= identifier of the backend\n"
     "                timer-period= timer period in microseconds\n"
     "                in|out.mixing-engine= use mixing engine to mix streams inside QEMU\n"
@@ -766,6 +774,9 @@ DEF("audiodev", HAS_ARG, QEMU_OPTION_audiodev,
 #ifdef CONFIG_AUDIO_SDL
     "-audiodev sdl,id=id[,prop[=value][,...]]\n"
     "                in|out.buffer-count= number of buffers\n"
+#endif
+#ifdef CONFIG_AUDIO_SNDIO
+    "-audiodev sndio,id=id[,prop[=value][,...]]\n"
 #endif
 #ifdef CONFIG_SPICE
     "-audiodev spice,id=id[,prop[=value][,...]]\n"
@@ -932,6 +943,19 @@ SRST
 
     ``in|out.buffer-count=count``
         Sets the count of the buffers.
+
+``-audiodev sndio,id=id[,prop[=value][,...]]``
+    Creates a backend using SNDIO. This backend is available on
+    OpenBSD and most other Unix-like systems.
+
+    Sndio specific options are:
+
+    ``in|out.dev=device``
+        Specify the sndio device to use for input and/or output. Default
+        is ``default``.
+
+    ``in|out.latency=usecs``
+        Sets the desired period length in microseconds.
 
 ``-audiodev spice,id=id[,prop[=value][,...]]``
     Creates a backend that sends audio through SPICE. This backend
@@ -2548,6 +2572,8 @@ DEF("smbios", HAS_ARG, QEMU_OPTION_smbios,
     "              [,asset=str][,part=str][,max-speed=%d][,current-speed=%d]\n"
     "              [,processor-id=%d]\n"
     "                specify SMBIOS type 4 fields\n"
+    "-smbios type=8[,external_reference=str][,internal_reference=str][,connector_type=%d][,port_type=%d]\n"
+    "                specify SMBIOS type 8 fields\n"
     "-smbios type=11[,value=str][,path=filename]\n"
     "                specify SMBIOS type 11 fields\n"
     "-smbios type=17[,loc_pfx=str][,bank=str][,manufacturer=str][,serial=str]\n"
@@ -4328,7 +4354,7 @@ SRST
 
     ``-action panic=none``
     ``-action reboot=shutdown,shutdown=pause``
-    ``-watchdog i6300esb -action watchdog=pause``
+    ``-device i6300esb -action watchdog=pause``
 
 ERST
 
@@ -4446,35 +4472,6 @@ SRST
     specifies the snapshot name used to load the initial VM state.
 ERST
 
-DEF("watchdog", HAS_ARG, QEMU_OPTION_watchdog, \
-    "-watchdog model\n" \
-    "                enable virtual hardware watchdog [default=none]\n",
-    QEMU_ARCH_ALL)
-SRST
-``-watchdog model``
-    Create a virtual hardware watchdog device. Once enabled (by a guest
-    action), the watchdog must be periodically polled by an agent inside
-    the guest or else the guest will be restarted. Choose a model for
-    which your guest has drivers.
-
-    The model is the model of hardware watchdog to emulate. Use
-    ``-watchdog help`` to list available hardware models. Only one
-    watchdog can be enabled for a guest.
-
-    The following models may be available:
-
-    ``ib700``
-        iBASE 700 is a very simple ISA watchdog with a single timer.
-
-    ``i6300esb``
-        Intel 6300ESB I/O controller hub is a much more featureful
-        PCI-based dual-timer watchdog.
-
-    ``diag288``
-        A virtual watchdog for s390x backed by the diagnose 288
-        hypercall (currently KVM only).
-ERST
-
 DEF("watchdog-action", HAS_ARG, QEMU_OPTION_watchdog_action, \
     "-watchdog-action reset|shutdown|poweroff|inject-nmi|pause|debug|none\n" \
     "                action when watchdog fires [default=reset]\n",
@@ -4496,7 +4493,7 @@ SRST
 
     Examples:
 
-    ``-watchdog i6300esb -watchdog-action pause``; \ ``-watchdog ib700``
+    ``-device i6300esb -watchdog-action pause``
 
 ERST
 

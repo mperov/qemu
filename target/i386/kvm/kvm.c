@@ -157,7 +157,7 @@ bool kvm_has_adjust_clock_stable(void)
 {
     int ret = kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK);
 
-    return (ret == KVM_CLOCK_TSC_STABLE);
+    return (ret & KVM_CLOCK_TSC_STABLE);
 }
 
 bool kvm_has_adjust_clock(void)
@@ -2176,15 +2176,11 @@ int kvm_arch_destroy_vcpu(CPUState *cs)
 
     g_free(env->xsave_buf);
 
-    if (cpu->kvm_msr_buf) {
-        g_free(cpu->kvm_msr_buf);
-        cpu->kvm_msr_buf = NULL;
-    }
+    g_free(cpu->kvm_msr_buf);
+    cpu->kvm_msr_buf = NULL;
 
-    if (env->nested_state) {
-        g_free(env->nested_state);
-        env->nested_state = NULL;
-    }
+    g_free(env->nested_state);
+    env->nested_state = NULL;
 
     qemu_del_vm_change_state_handler(cpu->vmsentry);
 
